@@ -1,0 +1,458 @@
+Sub CriarPontosDeRegistro()
+    Const ESPACO As Double = 300
+ 
+    Dim s As Shape, todasFormas() As Shape, marcador As Shape, arr() As Shape
+    Dim i As Integer, contador As Integer
+    Dim x1 As Double, y1 As Double, x2 As Double, y2 As Double
+    Dim dx As Double, dY As Double, comprimento As Double
+    Dim BaseX As Double, BaseY As Double
+    Dim normalx As Double, normaly As Double
+    Dim t As Double, deslocamento As Double
+    Dim todasFormas2 As New Collection
+    Dim curva As Curve
+    Dim sp As SubPath
+    Dim j As Long
+    Dim sr As ShapeRange
+    Dim deslocamentoX As Double, deslocamentoY As Double
+
+    ActiveDocument.Unit = cdrMillimeter
+    
+    ' Mostrar formulário
+    frmEscolhaPonto.Show
+    If frmEscolhaPonto.tipoSelecionado = 0 Then Exit Sub
+
+    ' Verificação de seleção
+    If ActiveSelection.Shapes.Count = 0 Then
+        MsgBox "Selecione um objeto primeiro.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Converte seleção em curvas caso necessário
+    Set s = ActiveSelection.Shapes(1)
+    If s.Type <> cdrCurveShape Then s.ConvertToCurves
+    Set curva = s.Curve
+
+    ' faz a checagem se a curva selecionada está fechada
+    If Not curva.Closed Then
+        MsgBox "A curva precisa estar fechada.", vbExclamation
+        Exit Sub
+    End If
+
+    ' percorre todo o segmento da linha
+For Each sp In curva.SubPaths
+    For i = 1 To sp.Nodes.Count
+        x1 = sp.Nodes(i).PositionX
+        y1 = sp.Nodes(i).PositionY
+
+        If i = sp.Nodes.Count Then
+            x2 = sp.Nodes(1).PositionX
+            y2 = sp.Nodes(1).PositionY
+        Else
+            x2 = sp.Nodes(i + 1).PositionX
+            y2 = sp.Nodes(i + 1).PositionY
+        End If
+                    
+        dx = x2 - x1
+        dY = y2 - y1
+               
+        comprimento = Sqr(dx ^ 2 + dY ^ 2)
+        If comprimento = 0 Then GoTo ProximoSegmento
+        
+        normalx = -dY / comprimento
+        normaly = dx / comprimento
+        
+               ' calcula o deslocamento inicial e ao longo da linha
+            Select Case frmEscolhaPonto.tipoSelecionado
+        Case 1: deslocamento = 3
+        Case 2, 3, 6: deslocamento = 6
+        Case 4, 5: deslocamento = 9
+        Case Else: deslocamento = 6
+        End Select
+        
+        t = 20 + Rnd * 30
+            
+            If frmEscolhaPonto.CheckQuadNao.Value = True Then
+            deslocamento = (-deslocamento - 1)
+            End If
+ 
+            
+        deslocamentoX = x1 + dx / 2 - normalx * deslocamento
+        deslocamentoY = y1 + dY / 2 - normaly * deslocamento
+            
+            ' loop de criação dos marcadores ao longo da linha
+            Do While t < comprimento
+                        
+                BaseX = x1 + (dx / comprimento) * t - normalx * deslocamento
+                BaseY = y1 + (dY / comprimento) * t - normaly * deslocamento
+
+                t = t + ESPACO
+          
+             ' seleção dos marcadores
+             Set marcador = CriarMarcador(BaseX, BaseY, frmEscolhaPonto.tipoSelecionado, x1, y1, x2, y2)
+             If Not marcador Is Nothing Then
+             todasFormas2.Add marcador
+             End If
+
+                Loop
+                
+ProximoSegmento:
+       Next i
+    Next sp
+    
+If Not marcador Is Nothing Then
+    Dim seta As Shape
+    Dim posX As Double, posY As Double
+    Dim distancia As Double
+    Dim dirX As Double, dirY As Double
+    Dim angulo As Double
+    Dim setaX As Double, setaY As Double
+
+    posX = marcador.CenterX
+    posY = marcador.CenterY
+
+    ' direção do último segmento
+    If comprimento <> 0 Then
+        dirX = dx / comprimento
+        dirY = dY / comprimento
+    Else
+        dirX = 1
+        dirY = 0
+    End If
+
+    ' distância ao longo do segmento
+    distancia = -15
+    setaX = posX + dirX * distancia
+    setaY = posY + dirY * distancia
+
+    ' cria a seta
+    Set seta = ActiveLayer.CreatePolygon2(setaX, setaY, 3, 3)
+    With seta
+        .Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+        .Outline.SetNoOutline
+    End With
+
+    ' calcula ângulo da linha
+    angulo = Atan2(dY, dx) * 180 / 3.14159265358979
+
+    ' rotaciona a seta
+    seta.RotationCenterX = seta.CenterX
+    seta.RotationCenterY = seta.CenterY
+    seta.Rotate angulo
+
+    ' mantém a ponta para cima
+    If Abs(angulo) > 90 Then
+        seta.Rotate 180
+        todasFormas2.Add seta
+      
+    Else
+    
+    seta.Rotate 180
+    todasFormas2.Add seta
+    
+    End If
+End If
+
+         ' Adiciona ao grupo
+         todasFormas2.Add seta
+         
+              ' agrupamento dos marcadores
+             If todasFormas2.Count > 1 Then
+             ReDim arr(0 To todasFormas2.Count - 1)
+
+             For j = 1 To todasFormas2.Count
+             Set arr(j - 1) = todasFormas2(j)
+        Next j
+              Set sr = ActiveDocument.CreateShapeRangeFromArray(arr)
+              sr.Group
+        End If
+
+     ' mensagem final
+    MsgBox "Pontos de registro criados e agrupados com sucesso", vbInformation
+End Sub
+
+Private Function Atan2(y As Double, x As Double) As Double
+    ' Retorna o ângulo em radianos entre -p e p
+    If x > 0 Then
+        Atan2 = Atn(y / x)
+    ElseIf x < 0 Then
+        If y >= 0 Then
+            Atan2 = Atn(y / x) + 3.14159265358979
+        Else
+            Atan2 = Atn(y / x) - 3.14159265358979
+        End If
+    Else
+        If y > 0 Then
+            Atan2 = 3.14159265358979 / 2
+        ElseIf y < 0 Then
+            Atan2 = -3.14159265358979 / 2
+        Else
+            Atan2 = 0
+        End If
+    End If
+End Function
+
+Function CalcularAngulo(ByVal x1 As Double, ByVal y1 As Double, ByVal x2 As Double, ByVal y2 As Double) As Double
+    Dim dx As Double, dY As Double
+    dx = x2 - x1
+    dY = y2 - y1
+
+    If dx = 0 And dY = 0 Then
+        CalcularAngulo = 0
+    Else
+        Dim anguloRad As Double
+        If anguloRad = 0 Then
+        anguloRad = 3
+        End If
+        
+        anguloRad = Atn(dY / dx)
+        
+        If dx < 0 Then
+            anguloRad = anguloRad + 3.14159265359
+        ElseIf dY < 0 Then
+            anguloRad = anguloRad + 2 * 3.14159265359
+        End If
+        
+        CalcularAngulo = anguloRad * 180 / 3.14159265359
+    End If
+End Function
+
+
+Function CriarMarcador(x As Double, y As Double, tipo As Integer, x1 As Double, y1 As Double, x2 As Double, y2 As Double) As Shape
+    Dim elipse1 As Shape, elipse2 As Shape, elipse3 As Shape, quadrado As Shape, quadrado2 As Shape, grp As Shape
+    Dim sr As ShapeRange
+    Dim CSPalette As Palette
+    Dim c As Color
+    Dim WhiteInkColor As Color
+    Dim found As Boolean
+    Dim seta As Shape
+    
+    Const ALTURA_DESEJADA_MM = 6
+    
+        ' Buscar a cor White_Ink apenas uma vez, caso o tipo envolva Spot (Case 3 ou 5)
+        If tipo = 3 Or tipo = 5 Then
+         
+      On Error Resume Next
+        Set CSPalette = Application.Palettes("SPOTS")
+        On Error GoTo 0
+    
+        If Not CSPalette Is Nothing Then
+        For Each c In CSPalette.Colors
+            If c.Name = "White_Ink" Then
+                Set WhiteInkColor = c
+                found = True
+                Exit For
+            End If
+        Next c
+        
+        If Not found Then
+            MsgBox "A cor 'White_Ink' não foi encontrada na paleta SPOT.", vbExclamation
+        End If
+        Else
+        MsgBox "A paleta 'SPOTS' não está carregada no CorelDRAW.", vbCritical
+        End If
+        End If
+    
+    Select Case tipo
+      
+        Case 1 ' Elipse preta com contorno azul
+            Set elipse1 = ActiveLayer.CreateEllipse2(x, y, 3, 3)
+                 With elipse1
+                .Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+                .Outline.SetProperties Width:=0.003, Color:=CreateCMYKColor(100, 0, 0, 0)
+                End With
+                
+                
+            Set sr = ActiveDocument.CreateShapeRangeFromArray(Array(elipse1))
+            Set grp = sr.Group
+
+            ' Retorna o grupo como resultado da função
+            Set CriarMarcador = grp
+
+
+        Case 2 ' Elipse preta com quadrado amarelo abaixo
+            Set quadrado = ActiveLayer.CreateRectangle2(x - 6, y - 6, 12, 12)
+            With quadrado
+                .Fill.UniformColor.CMYKAssign 0, 0, 100, 0
+                .Outline.SetNoOutline
+            End With
+            Set elipse1 = ActiveLayer.CreateEllipse2(x, y, 3, 3)
+            With elipse1
+                .Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+                .Outline.SetNoOutline
+            End With
+                     
+            Set sr = ActiveDocument.CreateShapeRangeFromArray(Array(quadrado, elipse1))
+            Set grp = sr.Group
+
+            ' Retorna o grupo como resultado da função
+            Set CriarMarcador = grp
+
+            
+        Case 3 ' Elipse preta com quadrado amarelo abaixo spot
+
+       
+        Set quadrado = ActiveLayer.CreateRectangle2(x - 6, y - 6, 12, 12)
+            With quadrado
+                .Fill.UniformColor.CMYKAssign 0, 0, 100, 0
+                .Outline.SetNoOutline
+            End With
+            
+        Set elipse1 = ActiveLayer.CreateEllipse2(x, y, 3, 3)
+            With elipse1
+                .Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+                .Outline.SetNoOutline
+            End With
+            
+        Set quadrado2 = ActiveLayer.CreateRectangle2(x - 6, y - 6, 12, 12)
+            With quadrado2
+            .Fill.UniformColor.CopyAssign WhiteInkColor
+            .OverprintFill = True
+            .Outline.SetNoOutline
+            End With
+                
+            Set sr = ActiveDocument.CreateShapeRangeFromArray(Array(quadrado, elipse1, quadrado2))
+            Set grp = sr.Group
+
+            ' Retorna o grupo como resultado da função
+            Set CriarMarcador = grp
+
+            
+     
+        Case 4 ' Elipse preta 18mm + branca 10mm por cima
+        
+            Set elipse1 = ActiveLayer.CreateEllipse2(x, y, 9, 9)
+            elipse1.Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+            elipse1.Outline.SetNoOutline
+
+            Set elipse2 = ActiveLayer.CreateEllipse2(x, y, 5, 5)
+            elipse2.Fill.UniformColor.CMYKAssign 0, 0, 0, 0
+            elipse2.Outline.SetNoOutline
+            
+            ' Realiza o Trim: elipse4 será a forma resultante, se houver
+              
+            Set elipse3 = elipse2.Trim(elipse1, True, True)
+
+            ' Verificador: verificar se elipse3 é válida (tem área)
+            If Not elipse3 Is Nothing Then
+            If elipse3.SizeWidth > 0 And elipse3.SizeHeight > 0 Then
+            ' A forma resultante é válida
+            elipse3.Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+            elipse3.Outline.SetNoOutline
+
+            Else
+            ' A forma resultante está vazia
+            elipse3.Delete
+            Set elipse3 = Nothing
+            MsgBox "Resultado do Trim ficou vazio — elipse3 não foi criada.", vbExclamation
+            End If
+            Else
+            ' Trim falhou ou não produziu forma
+            MsgBox "Trim falhou — elipse3 não foi criada.", vbExclamation
+            Exit Function
+            End If
+
+            ' Limpeza: remover elipse1 e elipse2 (opcional)
+            elipse1.Delete
+            elipse2.Delete
+        
+            Set sr = ActiveDocument.CreateShapeRangeFromArray(Array(elipse3))
+            Set grp = sr.Group
+
+            ' Retorna o grupo como resultado da função
+            Set CriarMarcador = grp
+
+       
+        Case 5 ' Elipse 18mm vazada 12mm spot
+        
+            found = False
+
+            Set elipse1 = ActiveLayer.CreateEllipse2(x, y, 9, 9)
+            elipse1.Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+            elipse1.Outline.SetNoOutline
+
+            Set elipse2 = ActiveLayer.CreateEllipse2(x, y, 6, 6)
+            elipse2.Fill.UniformColor.CMYKAssign 0, 0, 0, 0
+            elipse2.Outline.SetNoOutline
+            
+            ' Realiza o Trim: elipse3 será a forma resultante, se houver
+              
+            Set elipse3 = elipse2.Trim(elipse1, True, True)
+
+            ' Verificador: verificar se elipse3 é válida (tem área)
+            If Not elipse3 Is Nothing Then
+            If elipse3.SizeWidth > 0 And elipse3.SizeHeight > 0 Then
+            ' A forma resultante é válida
+            elipse3.Fill.UniformColor.CopyAssign WhiteInkColor
+            elipse3.OverprintFill = True
+            elipse3.Outline.SetNoOutline
+
+            Else
+            ' A forma resultante está vazia
+            elipse3.Delete
+            Set elipse3 = Nothing
+            MsgBox "Resultado do Trim ficou vazio — elipse3 não foi criada.", vbExclamation
+     End If
+Else
+            ' Trim falhou ou não produziu forma
+            MsgBox "Trim falhou — elipse3 não foi criada.", vbExclamation
+            Exit Function
+            End If
+
+            ' Limpeza: remover elipse1 e elipse2 (opcional)
+            elipse1.Delete
+            elipse2.Delete
+
+            Set sr = ActiveDocument.CreateShapeRangeFromArray(Array(elipse3))
+            Set grp = sr.Group
+
+            ' Retorna o grupo como resultado da função
+            Set CriarMarcador = grp
+
+       
+
+        Case 6 ' Elipse branca 6mm sobre preta 12mm
+            Set elipse1 = ActiveLayer.CreateEllipse2(x, y, 3, 3)
+            elipse1.Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+            elipse1.Outline.SetNoOutline
+
+            Set elipse2 = ActiveLayer.CreateEllipse2(x, y, 6, 6)
+            elipse2.Fill.UniformColor.CMYKAssign 0, 0, 0, 0
+            elipse2.Outline.SetNoOutline
+            
+                     
+              ' Realiza o Trim: elipse3 será a forma resultante, se houver
+              
+    Set elipse3 = elipse2.Trim(elipse1, True, True)
+
+    ' Verificador: verificar se elipse3 é válida (tem área)
+    If Not elipse3 Is Nothing Then
+        If elipse3.SizeWidth > 0 And elipse3.SizeHeight > 0 Then
+            ' A forma resultante é válida
+            elipse1.Fill.UniformColor.CMYKAssign 0, 0, 0, 100
+            elipse3.Outline.SetNoOutline
+
+        Else
+            ' A forma resultante está vazia
+            elipse3.Delete
+            Set elipse3 = Nothing
+            MsgBox "Resultado do Trim ficou vazio — elipse3 não foi criada.", vbExclamation
+        End If
+        Else
+            ' Trim falhou ou não produziu forma
+        MsgBox "Trim falhou — elipse3 não foi criada.", vbExclamation
+        Exit Function
+        End If
+
+            ' Limpeza: remover elipse1 e elipse2 (opcional)
+            elipse1.Delete
+            elipse2.Delete
+            
+            Set sr = ActiveDocument.CreateShapeRangeFromArray(Array(elipse3))
+            Set grp = sr.Group
+
+            ' Retorna o grupo como resultado da função
+            Set CriarMarcador = grp
+
+    End Select
+    
+    End Function
