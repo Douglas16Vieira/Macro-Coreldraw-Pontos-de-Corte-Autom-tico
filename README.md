@@ -1,6 +1,9 @@
 # Pontos-de-Corte-Automatico_vba
 Macro criada por mim com a ajuda da inteligência artificial para automatizar um processo específico de arte final simplificando e agilizando o processo.
 
+Link de demonstração:
+https://www.youtube.com/watch?v=vAal5TnTfAQ
+
 ## Créditos
 Esta macro foi desenvolvida com co-criação de IA. 
 A lógica, os testes e a adaptação para a API do CorelDRAW foram feitos por mim.
