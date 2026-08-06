@@ -456,3 +456,8 @@ Else
     End Select
     
     End Function
+
+' Macro de Ponto De Corte Automatico para CorelDRAW
+' Desenvolvida por: Douglas Bittencourt Vieira
+' Co-criada com auxílio de IA - 2026
+' Objetivo: Automatizar a criação de pontos de sangria
